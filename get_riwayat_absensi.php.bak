@@ -1,0 +1,71 @@
+<?php
+require 'config.php';
+
+header('Content-Type: application/json');
+
+// Pastikan user sudah login
+if (!isset($_SESSION['user_id'])) {
+    http_response_code(401);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Sesi telah berakhir. Silakan login kembali.'
+    ]);
+    exit;
+}
+
+try {
+    $user_id = $_SESSION['user_id'];
+    
+    // Query untuk mengambil riwayat absensi berdasarkan struktur tabel yang benar
+    $query = $pdo->prepare("
+        SELECT 
+            DATE(waktu_absen) as tanggal,
+            TIME(waktu_absen) as jam_absen,
+            foto,
+            latitude,
+            longitude
+        FROM absensi 
+        WHERE user_id = :user_id 
+        ORDER BY waktu_absen DESC
+        LIMIT 30
+    ");
+    
+    $query->execute(['user_id' => $user_id]);
+    $riwayat = $query->fetchAll(PDO::FETCH_ASSOC);
+    
+    if (empty($riwayat)) {
+        echo json_encode([
+            'success' => true,
+            'message' => 'Belum ada riwayat absensi',
+            'data' => []
+        ]);
+    } else {
+        // Format data untuk tampilan
+        $formatted_data = array_map(function($item) {
+            $tanggal = new DateTime($item['tanggal']);
+            return [
+                'tanggal' => $tanggal->format('d F Y'),
+                'jam_masuk' => date('H:i', strtotime($item['jam_absen'])),
+                'foto' => $item['foto'],
+                'lokasi' => [
+                    'lat' => $item['latitude'],
+                    'lng' => $item['longitude']
+                ],
+                'status' => 'Hadir'
+            ];
+        }, $riwayat);
+    
+    echo json_encode([
+        'success' => true,
+        'data' => $formatted_riwayat
+    ]);
+
+} catch (PDOException $e) {
+    error_log('Error in get_riwayat_absensi.php: ' . $e->getMessage());
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Maaf, terjadi kesalahan saat mengambil data riwayat absensi'
+    ]);
+}
+?>

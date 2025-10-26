@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Login - Absensi</title>
+    <style>
+        body{
+            font-family:Arial,Helvetica,sans-serif;
+            background:#f5f7fa;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            height:100vh;
+            margin:0;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4ecf7 100%);
+        }
+        .card{
+            background:#fff;
+            padding:24px;
+            border-radius:12px;
+            box-shadow:0 8px 24px rgba(0,0,0,0.1);
+            width:360px;
+            text-align:center;
+        }
+        .logo-container {
+            margin: -70px auto 25px;
+            width: 140px;
+            height: 140px;
+            background: #fff;
+            border-radius: 40px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .logo-container img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        .card h1{
+            font-size: 22px;
+            margin: 0 0 20px;
+            color: #2c3e50;
+            font-weight: 600;
+        }
+        label{
+            display:block;
+            font-size:14px;
+            margin-bottom:8px;
+            text-align: left;
+            color: #34495e;
+        }
+        input{
+            width:100%;
+            padding:12px;
+            margin-bottom:16px;
+            border:2px solid #e8ecef;
+            border-radius:8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+            box-sizing: border-box;
+        }
+        input:focus {
+            border-color: #3498db;
+            outline: none;
+        }
+        button{
+            width:100%;
+            padding:12px;
+            border:0;
+            background:#3498db;
+            color:#fff;
+            border-radius:8px;
+            font-weight:600;
+            font-size: 15px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        #message{
+            margin-top:12px;
+            font-size:14px;
+            min-height:20px;
+        }
+        .muted{
+            font-size:13px;
+            color:#7f8c8d;
+            margin-top:16px;
+        }
+        .muted a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        .muted a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="logo-container">
+            <img src="assets/logo-kpu.png" alt="Logo KPU">
+        </div>
+        <h1>Masuk ke Sistem Absensi</h1>
+        <form id="loginForm" action="login_process.php" method="POST">
+            <input type="hidden" id="csrf_token" name="csrf_token" value="">
+            <label for="email">Email atau NIP</label>
+            <input id="email" name="email" type="text" placeholder="email@kpu.go.id atau NIP" required>
+
+            <label for="password">Kata Sandi</label>
+            <input id="password" name="password" type="password" placeholder="••••••••" required>
+
+            <button id="submitBtn" type="submit">Login</button>
+            <div id="message" role="status" aria-live="polite"></div>
+        </form>
+        <p class="muted">Belum punya akun? <a href="register.html">Daftar</a></p>
+    </div>
+
+    <script>
+    (function(){
+        const form = document.getElementById('loginForm');
+        const msg = document.getElementById('message');
+        const btn = document.getElementById('submitBtn');
+
+        // Ambil token CSRF
+        let csrfReady = fetch('csrf_token.php', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+            .then(r => r.json())
+            .then(j => { if (j.csrf_token) document.getElementById('csrf_token').value = j.csrf_token; return j.csrf_token || null; })
+            .catch(err => { console.warn('Gagal ambil CSRF token', err); return null; });
+
+        form.addEventListener('submit', async function(e){
+            e.preventDefault();
+            msg.textContent = '';
+            btn.disabled = true;
+            const originalText = btn.textContent;
+            btn.textContent = 'Mohon tunggu...';
+
+            const token = await csrfReady;
+            if (!token) {
+                try {
+                    const r = await fetch('csrf_token.php', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+                    const j = await r.json();
+                    if (j.csrf_token) document.getElementById('csrf_token').value = j.csrf_token;
+                } catch (err) { console.warn('Gagal ambil ulang CSRF token', err); }
+            }
+
+            const formData = new URLSearchParams(new FormData(form));
+
+            try {
+                const resp = await fetch(form.action, {
+                    method: 'POST',
+                    headers: { 'Accept': 'application/json' },
+                    body: formData,
+                    credentials: 'same-origin'
+                });
+
+                const data = await resp.json();
+
+                if (resp.ok && data.success) {
+                    msg.style.color = 'green';
+                    msg.textContent = data.message || 'Login berhasil. Mengarahkan...';
+                    const role = data.user && data.user.role ? data.user.role : null;
+                    setTimeout(function(){
+                        if (role === 'admin') window.location.href = 'admin_dashboard.php';
+                        else if (role === 'supervisor') window.location.href = 'supervisor_dashboard.php';
+                        else window.location.href = 'dashboard.php';
+                    }, 700);
+                } else {
+                    msg.style.color = 'crimson';
+                    msg.textContent = data.message || 'Kombinasi Email/NIP dan password salah atau akun tidak aktif.';
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                }
+
+            } catch (err) {
+                console.error('Network or parse error:', err);
+                msg.style.color = 'crimson';
+                msg.textContent = 'Terjadi kesalahan jaringan atau server. Silakan coba lagi.';
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        });
+    })();
+    </script>
+</body>
+</html>

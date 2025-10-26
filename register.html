@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Daftar Akun - Absensi</title>
+    <style>
+        body{font-family:Arial,Helvetica,sans-serif;background:#f5f7fa;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
+        .card{background:#fff;padding:20px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.06);width:420px}
+        .card h1{margin:0 0 14px;font-size:18px}
+        label{display:block;font-size:13px;margin-bottom:6px}
+        input,select{width:100%;padding:10px;margin-bottom:12px;border:1px solid #d8dee7;border-radius:6px}
+        button{width:100%;padding:10px;border:0;background:#007bff;color:#fff;border-radius:6px;font-weight:600}
+        .muted{font-size:13px;color:#666}
+        #message{min-height:20px;margin-top:8px}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Buat Akun Baru</h1>
+        <form id="registerForm" action="register_process.php" method="POST">
+            <input type="hidden" id="csrf_token" name="csrf_token" value="">
+
+            <label for="nip">NIP</label>
+            <input id="nip" name="nip" type="text" required placeholder="NIP (contoh: PEG001)">
+
+            <label for="nama">Nama Lengkap</label>
+            <input id="nama" name="nama_lengkap" type="text" required placeholder="Nama lengkap">
+
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" required placeholder="email@kpu.go.id">
+
+            <label for="password">Kata Sandi</label>
+            <input id="password" name="password" type="password" required placeholder="Minimal 8 karakter">
+
+            <label for="password_confirm">Konfirmasi Kata Sandi</label>
+            <input id="password_confirm" name="password_confirm" type="password" required placeholder="Ketik ulang kata sandi">
+
+            <button id="submitBtn" type="submit">Daftar</button>
+            <div id="message" role="status" aria-live="polite"></div>
+        </form>
+        <p class="muted">Sudah punya akun? <a href="index.html">Masuk</a></p>
+    </div>
+
+    <script>
+    (function(){
+        const form = document.getElementById('registerForm');
+        const msg = document.getElementById('message');
+        const btn = document.getElementById('submitBtn');
+
+        // Ambil CSRF token
+        let csrfReady = fetch('csrf_token.php', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+            .then(r => r.json())
+            .then(j => { if (j.csrf_token) document.getElementById('csrf_token').value = j.csrf_token; return j.csrf_token || null; })
+            .catch(() => null);
+
+        form.addEventListener('submit', async function(e){
+            e.preventDefault();
+            msg.textContent = '';
+            btn.disabled = true;
+            const orig = btn.textContent;
+            btn.textContent = 'Mengirim...';
+
+            const token = await csrfReady;
+            if (!token) {
+                // coba ambil ulang
+                try {
+                    const r = await fetch('csrf_token.php', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+                    const j = await r.json();
+                    if (j.csrf_token) document.getElementById('csrf_token').value = j.csrf_token;
+                } catch (err) { /* ignore */ }
+            }
+
+            // Basic client-side validation
+            const pwd = document.getElementById('password').value;
+            const pwd2 = document.getElementById('password_confirm').value;
+            if (pwd.length < 8) {
+                msg.style.color = 'crimson'; msg.textContent = 'Kata sandi minimal 8 karakter.'; btn.disabled = false; btn.textContent = orig; return;
+            }
+            if (pwd !== pwd2) {
+                msg.style.color = 'crimson'; msg.textContent = 'Konfirmasi kata sandi tidak cocok.'; btn.disabled = false; btn.textContent = orig; return;
+            }
+
+            const formData = new URLSearchParams(new FormData(form));
+
+            try {
+                const resp = await fetch(form.action, {
+                    method: 'POST',
+                    headers: { 'Accept': 'application/json' },
+                    body: formData,
+                    credentials: 'same-origin'
+                });
+
+                const data = await resp.json();
+                if (resp.ok && data.success) {
+                    msg.style.color = 'green'; msg.textContent = data.message || 'Pendaftaran berhasil.';
+                    // Jika server melakukan auto-login, arahkan langsung ke dashboard
+                    if (data.auto_login || (data.user && data.user.id)) {
+                        setTimeout(() => window.location.href = 'dashboard.php', 700);
+                    } else {
+                        setTimeout(() => window.location.href = 'index.html', 900);
+                    }
+                } else {
+                    msg.style.color = 'crimson'; msg.textContent = data.message || 'Pendaftaran gagal.';
+                    btn.disabled = false; btn.textContent = orig;
+                }
+
+            } catch (err) {
+                console.error(err);
+                msg.style.color = 'crimson'; msg.textContent = 'Kesalahan jaringan. Silakan coba lagi.';
+                btn.disabled = false; btn.textContent = orig;
+            }
+        });
+    })();
+    </script>
+</body>
+</html>
